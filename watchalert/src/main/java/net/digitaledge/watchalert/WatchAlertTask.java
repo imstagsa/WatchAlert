@@ -24,6 +24,7 @@ public class WatchAlertTask {
 	private List<String> recipients;
 	private List<String> keywords;
 	private List<String> fields;
+	private List<WatchAlertReplaceFields> replaceFields;
 
 	private Long nextExecuteTime = new Long(0);
 	
@@ -48,6 +49,7 @@ public class WatchAlertTask {
 		this.smtpSubject = new String();
 		this.smtpBody = new String();
 		this.recipients = new ArrayList<String>();
+		this.replaceFields = new ArrayList<WatchAlertReplaceFields>();
 		
 	}
 
@@ -218,6 +220,28 @@ public class WatchAlertTask {
 		String[] stringArray = recipients.split(" ");
 		for(int i=0; i < stringArray.length; i++)
 			this.recipients.add(stringArray[i]);
+	}
+	
+	public List<WatchAlertReplaceFields> getReplaceFields() {
+		return replaceFields;
+	}
+
+	public void setReplaceFields(String fieldsFor) {
+		try{
+			String[] stringArray = fieldsFor.split(" ");
+			for(int y = 0; y < stringArray.length; y++)
+			{
+				String[] stringArray2 = stringArray[y].split(":");
+				if(stringArray2.length == 2)
+				{
+					WatchAlertReplaceFields watchAlertReplaceFields = new WatchAlertReplaceFields();
+					watchAlertReplaceFields.setField(stringArray2[0]);
+					watchAlertReplaceFields.setPattern(stringArray2[1]);
+					this.replaceFields.add(watchAlertReplaceFields);
+				}
+			}
+		}
+		catch(Exception e){ e.toString();}
 	}
 }
 

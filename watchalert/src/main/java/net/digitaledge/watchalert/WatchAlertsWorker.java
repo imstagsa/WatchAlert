@@ -79,10 +79,11 @@ public class WatchAlertsWorker implements Runnable {
 					else watchAlertTask.setTimeformat(settings.get("watchalert.task"+i+".timeformat"));
 					
 					if(settings.get("watchalert.task"+i+".timeZoneDiff") != null )
-					{
 						watchAlertTask.setTimeZoneDiff(Integer.parseInt(settings.get("watchalert.task"+i+".timeZoneDiff")));
-					}
-									
+					
+					if(settings.get("watchalert.task"+i+".replaceFields") != null )
+						watchAlertTask.setReplaceFields(settings.get("watchalert.task"+i+".replaceFields"));
+					
 					if(settings.get("watchalert.task"+i+".gt") != null )
 					{
 						watchAlertTask.setCampareFlag("GREATER_THAN");
@@ -155,14 +156,16 @@ public class WatchAlertsWorker implements Runnable {
 			logger.info("Enable debug: " + enableDebug);
 			logger.info("Task httpAction: " + watchAlertTask.getHttpLink(), watchAlertTask);
 			logger.info("Task httpBody: " + watchAlertTask.getHttpBody(), watchAlertTask);
-			logger.info("Task Indice: " + replaceKeywords(watchAlertTask.getIndice(), watchAlertTask));
-			logger.info("Task Querybody: " + replaceKeywords(watchAlertTask.getQuerybody(), watchAlertTask));
+			logger.info("Task Indice: " + replaceKeywords(watchAlertTask.getIndice(), watchAlertTask, null));
+			logger.info("Task Querybody: " + replaceKeywords(watchAlertTask.getQuerybody(), watchAlertTask, null));
 			logger.info("Task Period: " + watchAlertTask.getPeriod());
 			logger.info("Task Fields: " + watchAlertTask.getFields());
 			logger.info("Task Keywords: " + watchAlertTask.getKeywords());
 			logger.info("Task GreaterThan: " + watchAlertTask.getGreaterThan());
 			logger.info("Task LessThan: " + watchAlertTask.getLessThan());
 			logger.info("Task TimeZoneDiff: " + watchAlertTask.getTimeZoneDiff());
+			for(WatchAlertReplaceFields replaceFields: watchAlertTask.getReplaceFields()) 
+				logger.info("Task Replace Fields: " + replaceFields.getField() +" Pattern: " + replaceFields.getPattern());
 			if(watchAlertTask.getEmailFlag().equals("YES"))
 			{
 				logger.info("Task SMTP Server: " + watchAlertTask.getSmtpServer());
@@ -181,11 +184,12 @@ public class WatchAlertsWorker implements Runnable {
 	/**
 	 * Sends alert to EMS.
 	 */
-	private void sendAlert(WatchAlertTask watchAlertTask, String alertString){
+	private void sendAlert(WatchAlertTask watchAlertTask, String alertString, List<MapVariableValue> nodes)
+	{
 		URL url;	
     	try {
     		
-    		String alertMessage = replaceKeywords(watchAlertTask.getHttpBody(), watchAlertTask);
+    		String alertMessage = replaceKeywords(watchAlertTask.getHttpBody(), watchAlertTask, nodes);
     		String alertBody = watchAlertTask.getHttpLink();
     		
     		if(watchAlertTask.getHttpBody().length() > 0)  			
@@ -206,7 +210,7 @@ public class WatchAlertsWorker implements Runnable {
 		} 	
 	}
 	
-	public void sendEmailWithoutAuth(final WatchAlertTask watchAlertTask, String alertBody)
+	public void sendEmailWithoutAuth(final WatchAlertTask watchAlertTask, String alertBody, List<MapVariableValue> nodes)
 	{
 		try{
 			String[] stringArray = watchAlertTask.getSmtpServer().split(":");
@@ -215,18 +219,18 @@ public class WatchAlertsWorker implements Runnable {
 			if(stringArray.length == 2)
 				smtpPort = stringArray[1];			 	 
 			
-			String alertMessage = replaceKeywords(watchAlertTask.getSmtpBody(),watchAlertTask);
+			String alertMessage = replaceKeywords(watchAlertTask.getSmtpBody(),watchAlertTask, nodes);
 			alertMessage = alertMessage.replaceAll("%MESSAGE%", alertBody);
 		
 			Properties props = System.getProperties();
 			props.put("mail.smtp.host", smtpServer);
-			props.put("mail.debug", "true");
+			if (enableDebug.equals("true")) props.put("mail.debug", "true");
 			props.put("mail.transport.protocol", "smtp");
 			props.put("mail.smtp.socketFactory.fallback", "true");
 			props.put("mail.smtp.port", smtpPort);
 			props.put("java.net.preferIPv4Stack", "true");
 			Session session = Session.getInstance(props);
-			Message msg = new MimeMessage(session);
+			MimeMessage msg = new MimeMessage(session);
 			for(String addressstr : watchAlertTask.getRecipients())
 			{
 				String[] addressstr2 = addressstr.split(":");
@@ -247,7 +251,7 @@ public class WatchAlertsWorker implements Runnable {
 		
 			msg.setFrom(new InternetAddress(watchAlertTask.getSmtpFrom()));
 			msg.setSubject(watchAlertTask.getSmtpSubject());
-			msg.setText(alertMessage);
+			msg.setText(alertMessage, "utf-8", "html");
 			Transport transport = session.getTransport();
 			transport.connect();
 			transport.sendMessage(msg, msg.getAllRecipients());
@@ -261,7 +265,7 @@ public class WatchAlertsWorker implements Runnable {
 	 * Sending emails with authorization.
 	 * @param watchAlertTask
 	 */
-	public void sendEmailWithAuth(final WatchAlertTask watchAlertTask, String alertBody)
+	public void sendEmailWithAuth(final WatchAlertTask watchAlertTask, String alertBody, List<MapVariableValue> nodes)
 	{
 		logger.error("Sending email..."); 
 		Transport trans=null;
@@ -271,7 +275,7 @@ public class WatchAlertsWorker implements Runnable {
 		if(stringArray.length == 2)
 			smtpPort = stringArray[1];
 		
-		String alertMessage = replaceKeywords(watchAlertTask.getSmtpBody(),watchAlertTask);
+		String alertMessage = replaceKeywords(watchAlertTask.getSmtpBody(), watchAlertTask, nodes);
 		alertMessage = alertMessage.replaceAll("%MESSAGE%", alertBody);
 		
         Properties props = new Properties();  
@@ -289,7 +293,7 @@ public class WatchAlertsWorker implements Runnable {
             }); 
 
         try {
-        	Message msg = new MimeMessage(session);             
+        	MimeMessage msg = new MimeMessage(session);             
         	InternetAddress addressFrom = new InternetAddress(watchAlertTask.getSmtpFrom());  
         	msg.setFrom(addressFrom);
         	       	
@@ -312,7 +316,7 @@ public class WatchAlertsWorker implements Runnable {
         	}     
         	
         	msg.setSubject(watchAlertTask.getSmtpSubject());  
-        	msg.setText(alertMessage);
+        	msg.setText(alertMessage, "utf-8", "html");
         	trans = session.getTransport("smtp");
         	trans.connect(smtpServer, watchAlertTask.getSmtpFrom(), watchAlertTask.getSmtpPassword());
         	msg.saveChanges();
@@ -325,15 +329,13 @@ public class WatchAlertsWorker implements Runnable {
         }
 	}
 	
-	private String replaceKeywords(String str, WatchAlertTask watchAlertTask)
+	private String replaceKeywords(String str, WatchAlertTask watchAlertTask, List<MapVariableValue> nodes)
 	{
 		try{
 			
 			str = str.replaceAll("%YEAR%", getDateTime("yyyy", watchAlertTask.getTimeZoneDiff()));
 			str = str.replaceAll("%MONTH%", getDateTime("MM", watchAlertTask.getTimeZoneDiff()));
 			str = str.replaceAll("%DAY%", getDateTime("dd", watchAlertTask.getTimeZoneDiff()));
-			//if(watchAlertTask.getMessage().length() > 0)
-			//	str = str.replaceAll("%MESSAGE%", watchAlertTask.getMessage());
 			if(watchAlertTask.getTimeformat().length() > 0)
 			{
 				str = str.replaceAll("%TIMESTAMP%", getDateTime(watchAlertTask.getTimeformat(), watchAlertTask.getTimeZoneDiff()));
@@ -348,6 +350,24 @@ public class WatchAlertsWorker implements Runnable {
 			str = str.replaceAll("%EPOCHTIME%", Long.toString(getEpochTime()));
 			str = str.replaceAll("%CURDATE%", getDateTime(watchAlertTask.getTimeformat(), watchAlertTask.getTimeZoneDiff()));	
 			str = str.replaceAll("%HOST%", "4443");
+			
+			if(nodes != null)
+			{
+				for(int i = 0; i < nodes.size(); i++)
+				{
+					if(nodes.get(i).getVariable() != null)
+					{
+						for(WatchAlertReplaceFields replaceFields: watchAlertTask.getReplaceFields())
+						{
+							if(replaceFields.getField().toLowerCase().equals(nodes.get(i).getVariable().toLowerCase()))
+							{
+								str = str.replaceAll("%"+replaceFields.getPattern()+"%", nodes.get(i).getValue());
+								logger.info("Found replacement field:" + nodes.get(i).getValue() + " with pattern: " + replaceFields.getPattern());
+							}
+						}
+					}
+				}
+			}
 			
 			return str;
 		
@@ -401,17 +421,19 @@ public class WatchAlertsWorker implements Runnable {
 		arrayList = 0;
 		parseValue = false;
 		jsonStrated = false;
-		List<String> activeAlert = new ArrayList<String>();
-		HashMap<Integer, MapVariableValue> nodes = new HashMap<Integer, MapVariableValue>();
+		//List<String> activeAlert = new ArrayList<String>();
+		HashMap<Integer, MapVariableValue> receivedNodes = new HashMap<Integer, MapVariableValue>();
+		List<MapAlertStrings> taskNodes = new ArrayList<MapAlertStrings>();
+		//List<MapVariableValue> taskNodes = new ArrayList<MapVariableValue>();
 		try {
 			Timestamp timestamp1 = new Timestamp(System.currentTimeMillis());
 			logger.info("getNewLogs sending request to socket.");
-			String urlParameters = replaceKeywords(watchAlertTask.getQuerybody(), watchAlertTask);
+			String urlParameters = replaceKeywords(watchAlertTask.getQuerybody(), watchAlertTask, null);
 			logger.info(urlParameters);
 			byte[] postData = urlParameters.getBytes(StandardCharsets.UTF_8);
 			Socket socket = new Socket(InetAddress.getByName(elasticHost), Integer.parseInt(elasticPort));
 			PrintWriter pw = new PrintWriter(socket.getOutputStream());
-			pw.print("GET " + replaceKeywords(watchAlertTask.getIndice(), watchAlertTask) + " HTTP/1.1\r\n");
+			pw.print("GET " + replaceKeywords(watchAlertTask.getIndice(), watchAlertTask, null) + " HTTP/1.1\r\n");
 			pw.print("Host: "+ InetAddress.getByName(elasticHost)+":"+Integer.parseInt(elasticPort)+"\r\n");
 			pw.print("Accept: */*\r\n");
 			pw.print("Content-Length: " + Integer.toString(postData.length) +"\r\n");
@@ -423,11 +445,10 @@ public class WatchAlertsWorker implements Runnable {
 			    
 			String t;
 			logger.info("getNewLogs starting receiving from socket.");
-			logger.info("123");
 			while((t = br.readLine()) != null)
 			{			
 				String str = t.trim();
-				parseLine(str, nodes);
+				parseLine(str, receivedNodes);
 				
 				if(jsonStrated && arrayList <= 0)
 				{
@@ -439,69 +460,85 @@ public class WatchAlertsWorker implements Runnable {
 			br.close();
 			if(socket.isConnected())
 				socket.close();
-			logger.info("nodes.size(): " + nodes.size());
-			for(int i = 0; i< nodes.size(); i++)
+			//logger.info("nodes.size(): " + receivedNodes.size());
+			
+			MapAlertStrings mapAlertStrings = new MapAlertStrings();
+			
+			for(int i = 0; i< receivedNodes.size(); i++)
 			{
-				logger.info("Node key: " + i + "  Variable: " + nodes.get(i).getVariable() + "  value: " + nodes.get(i).getValue());
-				if(nodes.get(i).getVariable() != null)
+				//logger.info("Node key: " + i + "  Variable: " + receivedNodes.get(i).getVariable() + "  value: " + receivedNodes.get(i).getValue());
+				if(receivedNodes.get(i).getVariable() != null)
 				{
+					if(receivedNodes.get(i).getVariable().equals("_index") && mapAlertStrings.getAlertString().length() > 0)
+					{
+						taskNodes.add(mapAlertStrings);
+						mapAlertStrings = new MapAlertStrings();
+					}
+					
+					mapAlertStrings.getAlertMapStrings().add(receivedNodes.get(i));
+					
 					for(String field: watchAlertTask.getFields())
 					{
-						if(nodes.get(i).getVariable().equals(field))
+						if(receivedNodes.get(i).getVariable().equals(field))
 						{
-							if(nodes.get(i).getValue() != null)
+							if(receivedNodes.get(i).getValue() != null)
 							{	
 								if(watchAlertTask.getCampareFlag().equals("LESS_THAN"))
 								{
-									Double value1 = Double.parseDouble(nodes.get(i).getValue());
+									Double value1 = Double.parseDouble(receivedNodes.get(i).getValue());
 									if(value1 < watchAlertTask.getLessThan())
 									{
-										activeAlert.add(nodes.get(i).getValue());
+										//activeAlert.add(receivedNodes.get(i).getValue());
+										mapAlertStrings.setAlertString(receivedNodes.get(i).getValue());
 										logger.info("Found less than value: " + value1 +" in " + watchAlertTask.getLessThan());
 									}
 								}
 								else if(watchAlertTask.getCampareFlag().equals("GREATER_THAN"))
 								{
-									Double value1 = Double.parseDouble(nodes.get(i).getValue());
+									Double value1 = Double.parseDouble(receivedNodes.get(i).getValue());
 									if(value1 > watchAlertTask.getGreaterThan())
 									{
-										activeAlert.add(nodes.get(i).getValue());
+										//activeAlert.add(receivedNodes.get(i).getValue());
+										mapAlertStrings.setAlertString(receivedNodes.get(i).getValue());
 										logger.info("Found greater than value: " + value1 +" in " + watchAlertTask.getGreaterThan());
 									}
 								}
 								else if(watchAlertTask.getCampareFlag().equals("FIND_KEYWORD"))
 								{
-									boolean firealert = false;
 									for(String keyword: watchAlertTask.getKeywords())
-									{
-										//logger.info("Camparing keyword: " + keyword  +" in " + nodes.get(i).getValue());
-										if(nodes.get(i).getValue().contains(keyword))
-										{
-											firealert = true;
-											logger.info("Found keyword: " + keyword  +" in " + nodes.get(i).getValue());
-										}
-									}
-									if (firealert) activeAlert.add(nodes.get(i).getValue());
+										if(receivedNodes.get(i).getValue().contains(keyword))
+											mapAlertStrings.setAlertString(receivedNodes.get(i).getValue());
 								}
 							}
 						}
 					}
 				}
 			}
-			logger.info("activeAlert length: " + activeAlert.size());
-			for(String alertBody : activeAlert)
+			
+			//Adding last alert
+			if(mapAlertStrings.getAlertString().length() > 0)
+				taskNodes.add(mapAlertStrings);
+			
+			logger.info("activeAlert length: " + taskNodes.size());
+			for(MapAlertStrings alertBody : taskNodes)
 			{
+				logger.info("----------------------------------------------------------------");
+				logger.info("ALERT: " + alertBody.getAlertString());
+				for(MapVariableValue mapVariableValue : alertBody.getAlertMapStrings())
+					logger.info(mapVariableValue.getVariable() + ": " + mapVariableValue.getValue());
+				
+				
 				logger.info("watchAlertTask.getEmailFlag(): " + watchAlertTask.getEmailFlag());
 				if(watchAlertTask.getEmailFlag().equals("YES"))
-					if(watchAlertTask.getSmtpPassword().length()>0) sendEmailWithAuth(watchAlertTask, alertBody);
-					else sendEmailWithoutAuth(watchAlertTask, alertBody);
+					if(watchAlertTask.getSmtpPassword().length()>0) sendEmailWithAuth(watchAlertTask, alertBody.getAlertString(), alertBody.getAlertMapStrings());
+					else sendEmailWithoutAuth(watchAlertTask, alertBody.getAlertString(), alertBody.getAlertMapStrings());
 				if(watchAlertTask.getHttpLink().length() > 1)
-					sendAlert(watchAlertTask, alertBody);
+					sendAlert(watchAlertTask, alertBody.getAlertString(), alertBody.getAlertMapStrings());
 			}
 			Timestamp timestamp2 = new Timestamp(System.currentTimeMillis());
 			logger.info("Spend time: " + (timestamp2.getTime() - timestamp1.getTime()) + "ms");
 		} catch (Exception e) {
-			logger.error(e.toString());
+			logger.info(e.toString());
 		}
 	}
 	
@@ -549,7 +586,6 @@ public class WatchAlertsWorker implements Runnable {
 		boolean isParenness = false;
 		for (int i = startPos ; i< line.length() - startPos; i++)
 		{
-			//System.out.println(line.charAt(i));
 			if(line.charAt(i) == '"')
 			{
 				startPos = startPos + y;
@@ -604,23 +640,17 @@ public class WatchAlertsWorker implements Runnable {
 				}
 			}
 		}
-		//logger.info("Nodes size before:" + nodes.size() + "  parseValue: " + parseValue + "  value: " + value);
 		if(parseValue)
 		{
-			logger.info("Nodes add value: " + value);
-			//nodes.get(key).setValue(value);
+			if (enableDebug.equals("true")) logger.info("Nodes add value: " + value);
 			nodes.get(key - 1).setValue(value);
 		}
 		else
 		{
-			logger.info("Nodes add variable:  " + value);
+			if (enableDebug.equals("true")) logger.info("Nodes add variable:  " + value);
 			nodes.put(key, new MapVariableValue(value));
 			key++;
 		}
-		//logger.info("Nodes size after:" + nodes.size());
-		//logger.info("Node key: " + key);
-		//logger.info("Node key: " + key + "  Variable: " + nodes.get(key - 1).getVariable());
-		//logger.info("Node key: " + key + "  Variable: " + nodes.get(key - 1).getVariable() + "  value: " + nodes.get(key - 1).getValue());
 		return pos;
 	}
 	
@@ -634,7 +664,6 @@ public class WatchAlertsWorker implements Runnable {
 			if(str.charAt(y) == '{')
 			{
 				parseValue = false;
-				logger.info("================== FOUND { ====================");
 				jsonStrated = true;
 				arrayList += 1;
 			}
@@ -667,11 +696,7 @@ public class WatchAlertsWorker implements Runnable {
 					parseValue = false;
 			
 				if(str.charAt(y) == '}')
-				{
-					//jsonStarted = true;
 					arrayList -= 1;
-					//logger.info("================== FOUND } ====================");
-				}
 			}
 		}
 	}

@@ -5,7 +5,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>net.digitaledge</groupId>
 	<artifactId>watchalert</artifactId>
-	<version>0.0.2</version>
+	<version>0.0.3</version>
 	<packaging>jar</packaging>
 	<description>elasticsearch watchalert plugin</description>
 	<inceptionYear>2017</inceptionYear>

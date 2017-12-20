@@ -25,7 +25,7 @@ Additional options for each task:
 	watchalert.taskX.gt - greater than. If this option is configured then plugin will try  convert value in specific fields to double and will compare it with value in this option.   
 	watchalert.taskX.lt - less than. If this option is configured then plugin will try convert value in specific fields to double and will compare it with value in this option. It received value is less than expected then an alert event will fired.
 	watchalert.taskX.timeZoneDiff - time zone difference in hours. Can be positive or negative. 
-
+	watchalert.taskX.replaceFields - contain pair of words. First word is the field name in JSON. Second word is passphrases and must be uppercase. Each pair must be separated by space, the words inside pair must be separated by ":" sing. Example: newword:NEWWORD. When plugin will find %NEWWORD% in text than it will be replaces by value of field newword.  
 Actions: each task must has at minimum one action. Supported two actions: send HTTP request and  	
 
 ACTION MAIL: each task can have only one set of email settings. All of settings bellow must be present for each task except smtppassword.
@@ -35,6 +35,7 @@ ACTION MAIL: each task can have only one set of email settings. All of settings 
 	watchalert.taskX.action.recipients - list of recipients separated by space. Each record must be in format: prefix:email@domain. Prefix should be one of following: to, cc,  bcc.
 	watchalert.taskX.action.smtpsubject - mail subject.
 	watchalert.taskX.action.smtpbody - mail body.
+
 ACTION HTTP: sending HTTP request, method GET. Both parameters must be present.
 	watchalert.taskX.action.httplink - EMS host. Should contain POST query.
 	watchalert.taskX.action.httpbody - Contains message string. If defined, it will be replace all %MESSAGE% pattern.
